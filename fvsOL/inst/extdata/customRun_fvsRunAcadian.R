@@ -1,3 +1,4 @@
+#Bo: only run this code with baseline run 20240119
 
 unlink("Acadian.log")
 
@@ -11,9 +12,10 @@ fvsRunAcadian <- function(runOps,logfile="Acadian.log")
     sink()
     sink(logfile,append=TRUE)
   }
-  
+
   #load the growth model R code
-  rFn="AcadianGY.R"
+  #rFn="AcadianGY.R"
+  rFn=paste0(localDir, "open-fvs-R-64-v", fvsVersion, "ForestVegetationSimulator-Interface/fvsOL/inst/extdata/AcadianGY.R")
   if (file.exists(rFn)) source(rFn) else
   {
     rFn = system.file("extdata", rFn, package="fvsOL")
@@ -76,16 +78,16 @@ fvsRunAcadian <- function(runOps,logfile="Acadian.log")
         dplyr::ungroup() %>%
         dplyr::rowwise() %>%
         dplyr::mutate(pHT= HTPred(SPP=SP, DBH=DBH, CSI=CSI, CCF=CCF, BAL=BAL), # Predicted height
-                      HT= ifelse(HT == 0 | HT>100, 
+                      HT= ifelse(HT == 0 | HT>100,
                                  pHT, # Use predicted height where value is missing or in excess of 100
-                                 HT), 
+                                 HT),
                       HCB= HCBPred(SPP=SP, DBH=DBH, HT=pHT,CCF=CCF, BAL=BAL)) %>%
         dplyr::ungroup() %>%
         dplyr::mutate(pCR= (HT-HCB)/HT, # predicted crown ratio
                       CR= ifelse(CR == 0,
                                  pCR, # use predicted crown ratio where value is missing
-                                 CR)) 
-                     
+                                 CR))
+
   tree
   }
 
@@ -164,7 +166,7 @@ fvsRunAcadian <- function(runOps,logfile="Acadian.log")
     #fetch some stand level information
     stdInfo = fvsGetEventMonitorVariables(c("site","year","cendyear","elev"))
     stdIds  = fvsGetStandIDs()
-    
+
     CSI = fvsGetEventMonitorVariables("csi")
     if (is.na(CSI)) {CSI = fvsGetEventMonitorVariables("site")*FTtoM
     CSI   = approxfun(c(0,8,14,20),c(0,8,12,14),rule=2)(CSI)}
@@ -189,7 +191,7 @@ fvsRunAcadian <- function(runOps,logfile="Acadian.log")
 
     #fetch the fvs trees and form the AcadianGY "tree" dataframe
     orgtree = fvsGetTreeAttrs(c("plot","species","tpa","dbh","ht","cratio","special", "mgmtcd",
-                                "dg", "htg", "mort")) 
+                                "dg", "htg", "mort"))
     names(orgtree) = toupper(names(orgtree))
     orgtree$TREE= 1:nrow(orgtree)
     names(orgtree)[match("SPECIES",names(orgtree))] = "SP"
@@ -201,9 +203,9 @@ fvsRunAcadian <- function(runOps,logfile="Acadian.log")
     orgtree$DBH  = orgtree$DBH  * INtoCM
     orgtree$HT   = orgtree$HT   * FTtoM
     orgtree$EXPF = orgtree$EXPF * HAtoACR
- 
+
     #load the form and risk class data using FVS variable ISPECL loaded using "special"
-    
+
     orgtree$Form = rep(" ",nrow(orgtree))
     orgtree$Risk = rep(" ",nrow(orgtree))
     tmpset = orgtree$SPECIAL > 0 & orgtree$SPECIAL < 85
@@ -217,12 +219,12 @@ fvsRunAcadian <- function(runOps,logfile="Acadian.log")
                  SBW=SBW,THINMOD=THINMOD,verbose=TRUE,
                  rtnVars = c("PLOT","SP","DBH","EXPF","TREE","HT","HCB","Form","Risk"))
 
-    tree=make_acd_tree(tree.list=orgtree, 
-                       num.plots=as.numeric(room['nplots']))  
+    tree=make_acd_tree(tree.list=orgtree,
+                       num.plots=as.numeric(room['nplots']))
     #tree$YEAR = stdInfo["year"]
-    
+
     if (nrow(tree) == 0) next
-    
+
     for (year in stdInfo["year"]:stdInfo["cendyear"])
     {
       tree$YEAR = year
@@ -245,13 +247,13 @@ fvsRunAcadian <- function(runOps,logfile="Acadian.log")
     if (is.null(tree)) next
     # put the PLOT variable back to a character string (defactor it).
     if (is.factor(tree$PLOT)) tree$PLOT = levels(tree$PLOT)[as.numeric(tree$PLOT)]
-    
-    cat ("fvsRunAcadian: is.null(tree$EXPF)=",is.null(tree$EXPF),"\n") 
-    
+
+    cat ("fvsRunAcadian: is.null(tree$EXPF)=",is.null(tree$EXPF),"\n")
+
     # tree list to hand back to FVS
-    tofvs=make_fvs_tree(tree.list=tree, 
+    tofvs=make_fvs_tree(tree.list=tree,
                         orgtree.list=orgtree,
-                        num.plots=as.numeric(room['nplots']),  
+                        num.plots=as.numeric(room['nplots']),
                         mort.model=mortModel)
 
     #fetch the height, ba and mortality multipliers, veriable "mults" where the rows are
@@ -279,20 +281,20 @@ fvsRunAcadian <- function(runOps,logfile="Acadian.log")
     atstop6 = FALSE
 
     # adding regeneration?
-   
-    toadd= make_fvs_regen(tree.list=tree, 
+
+    toadd= make_fvs_regen(tree.list=tree,
                            orgtree.list=orgtree,
                            num.plots=as.numeric(room['nplots']),
                            spcodes=spcodes)
-   
+
     newTrees = nrow(toadd)
-    
+
     cat ("fvsRunAcadian: num newtrees=",newTrees,"\n")
     if (newTrees>0)
     {
       if (newTrees < room["maxtrees"] - room["ntrees"])
       {
-       
+
         fvsRun(stopPointCode=6,stopPointYear=-1)
         atstop6 = TRUE
         fvsAddTrees(toadd)
@@ -334,7 +336,7 @@ fvsRunAcadian <- function(runOps,logfile="Acadian.log")
   rtn
 }
 
-# NOTE: I (NLCrookston) tried various ways of building these elements. Setting the 
+# NOTE: I (NLCrookston) tried various ways of building these elements. Setting the
 # initial value to the saved value when the elements are created seems to work well.
 # What did not work was setting the initial value to some default and then
 # changing it using an update call in the server code.
